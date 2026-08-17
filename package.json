@@ -12,7 +12,7 @@
   },
   "engines": {
   "node": "18.x"
-}
+},
   "dependencies": {
     "@neoaz07/nkxica": "^1.0.3",
     "axios": "^1.13.1",
