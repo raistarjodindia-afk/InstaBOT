@@ -1,6 +1,6 @@
 'use strict';
 
-const { login } = require('@tanvir143/insta');
+const { login } = require('ica-by-tanvir');
 
 const fs   = require('fs');
 const http = require('http');
