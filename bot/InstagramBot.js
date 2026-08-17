@@ -1,6 +1,6 @@
 'use strict';
 
-const { login } = require('@neoaz07/nkxica');
+const { login } = require('@tanvir143/insta');
 
 const fs   = require('fs');
 const http = require('http');
