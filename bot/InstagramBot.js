@@ -45,7 +45,7 @@ class InstagramBot {
       logger.info(`Health server listening on port ${port}`);
     });
     server.on('error', err => {
-      logger.error('Health server error', { error: err.message });
+      logger.error('Health server error', { error: err?.message || err });
     });
     return server;
   }
@@ -74,8 +74,12 @@ class InstagramBot {
       this._scheduleAutoRestart();
       this._scheduleAutoUptime();
     } catch (error) {
-      logger.error('Failed to start bot', { error: error.message, stack: error.stack });
-      await this.eventLoader.handleEvent('error', error);
+      const errorMsg = error?.message || error?.error || JSON.stringify(error) || 'Unknown Error';
+      logger.error('Failed to start bot', { error: errorMsg, stack: error?.stack });
+      try {
+        await this.eventLoader.handleEvent('error', error);
+      } catch (e) {}
+
       if (this.shouldReconnect && this.reconnectAttempts < config.MAX_RECONNECT_ATTEMPTS) {
         this.scheduleReconnect();
       } else {
@@ -85,7 +89,7 @@ class InstagramBot {
     }
   }
 
-  // ── Login ─────────────────────────────────────────────────────────────
+  // ── Login (Safe Guarded) ─────────────────────────────────────────────
 
   async loadAndLogin() {
     const hasCookieFile   = fs.existsSync(config.ACCOUNT_FILE);
@@ -93,20 +97,25 @@ class InstagramBot {
     const cookieContent   = hasCookieFile ? fs.readFileSync(config.ACCOUNT_FILE, 'utf-8') : '';
     const hasValidCookies = hasCookieFile && this._hasValidCookies(cookieContent);
 
-    if (hasValidCookies) {
-      logger.info('Loading cookies from account.txt…');
-      this.ig = await login(cookieContent);
-    } else if (hasCredentials) {
-      logger.info('No valid cookies found — logging in with email/password…');
-      this.ig = await login({
-        email:    config.ACCOUNT_EMAIL,
-        password: config.ACCOUNT_PASSWORD
-      });
-    } else {
-      throw new Error(
-        'No valid cookies in account.txt and no email/password configured. ' +
-        'Please add Instagram cookies or fill in instagramAccount.email/password in config/default.json.'
-      );
+    try {
+      if (hasValidCookies) {
+        logger.info('Loading cookies from account.txt…');
+        this.ig = await login(cookieContent);
+      } else if (hasCredentials) {
+        logger.info('No valid cookies found — logging in with email/password…');
+        this.ig = await login({
+          email:    config.ACCOUNT_EMAIL,
+          password: config.ACCOUNT_PASSWORD
+        });
+      } else {
+        throw new Error(
+          'No valid cookies in account.txt and no email/password configured. ' +
+          'Please add Instagram cookies or fill in instagramAccount.email/password in config/default.json.'
+        );
+      }
+    } catch (loginErr) {
+      const cleanMsg = loginErr?.message || loginErr?.error || JSON.stringify(loginErr) || 'Login execution failed';
+      throw new Error(cleanMsg);
     }
 
     // Safeguard check to ensure login instance was successfully returned
@@ -148,6 +157,8 @@ class InstagramBot {
     this.eventLoader.handleEvent('ready', {}).then(() => {
       this.startListening();
       this._startReminderScheduler();
+    }).catch(err => {
+      logger.error('Error in ready event handler', { error: err?.message || err });
     });
   }
 
@@ -161,42 +172,49 @@ class InstagramBot {
       return;
     }
 
-    this.ig.listen((err, event) => {
-      if (err) {
-        const msg = err.message || String(err);
-        logger.error('Listen error', { error: msg });
+    try {
+      this.ig.listen((err, event) => {
+        if (err) {
+          const msg = err?.message || err?.error || String(err);
+          logger.error('Listen error', { error: msg });
 
-        const isAuthError = /not authorized|login_required|unauthorized/i.test(msg);
-        if (isAuthError) {
-          logger.error('Session expired or invalid. Update account.txt or credentials in config.');
-          this._sendMqttErrorNotification(msg);
-          if (config.AUTO_RESTART_WHEN_MQTT_ERROR) {
+          const isAuthError = /not authorized|login_required|unauthorized/i.test(msg);
+          if (isAuthError) {
+            logger.error('Session expired or invalid. Update account.txt or credentials in config.');
+            this._sendMqttErrorNotification(msg);
+            if (config.AUTO_RESTART_WHEN_MQTT_ERROR) {
+              this.scheduleReconnect();
+            }
+          } else if (this.shouldReconnect) {
             this.scheduleReconnect();
           }
-        } else if (this.shouldReconnect) {
-          this.scheduleReconnect();
+          return;
         }
-        return;
+
+        if (!event) return;
+
+        if (event.type === 'message') {
+          this.handleMessage(event).catch(error => {
+            logger.error('Error handling message', { error: error?.message || error });
+          });
+        } else if (event.type === 'event') {
+          this.handleThreadEvent(event).catch(error => {
+            logger.error('Error handling thread event', { error: error?.message || error });
+          });
+        } else if (event.type === 'message_reaction') {
+          this.handleReactionEvent(event).catch(error => {
+            logger.error('Error handling reaction event', { error: error?.message || error });
+          });
+        }
+      });
+    } catch (listenerErr) {
+      logger.error('Critical listen failure', { error: listenerErr?.message || listenerErr });
+      if (this.shouldReconnect) {
+        this.scheduleReconnect();
       }
+    }
 
-      if (!event) return;
-
-      if (event.type === 'message') {
-        this.handleMessage(event).catch(error => {
-          logger.error('Error handling message', { error: error.message });
-        });
-      } else if (event.type === 'event') {
-        this.handleThreadEvent(event).catch(error => {
-          logger.error('Error handling thread event', { error: error.message });
-        });
-      } else if (event.type === 'message_reaction') {
-        this.handleReactionEvent(event).catch(error => {
-          logger.error('Error handling reaction event', { error: error.message });
-        });
-      }
-    });
-
-    if (config.RESTART_LISTEN_MQTT.enable) {
+    if (config.RESTART_LISTEN_MQTT && config.RESTART_LISTEN_MQTT.enable) {
       this._scheduleMqttRestart();
     }
 
@@ -249,7 +267,7 @@ class InstagramBot {
 
       await this.eventLoader.handleEvent('message', normalizedEvent);
     } catch (error) {
-      logger.error('Error in handleMessage', { error: error.message, stack: error.stack });
+      logger.error('Error in handleMessage', { error: error?.message || error, stack: error?.stack });
     }
   }
 
@@ -298,7 +316,7 @@ class InstagramBot {
         });
       }
     } catch (error) {
-      logger.error('Error in handleThreadEvent', { error: error.message });
+      logger.error('Error in handleThreadEvent', { error: error?.message || error });
     }
   }
 
@@ -320,11 +338,11 @@ class InstagramBot {
         timestamp:       event.timestamp || Date.now()
       });
     } catch (error) {
-      logger.error('Error in handleReactionEvent', { error: error.message });
+      logger.error('Error in handleReactionEvent', { error: error?.message || error });
     }
   }
 
-  // ── Thread-info cache (for role-1 group admin checks) ─────────────────
+  // ── Thread-info cache ─────────────────────────────────────────────────
 
   _threadInfoCache = new Map();
 
@@ -359,7 +377,7 @@ class InstagramBot {
           }
           return result;
         } catch (error) {
-          logger.error('Failed to send message', { error: error.message, threadID });
+          logger.error('Failed to send message', { error: error?.message || error, threadID });
           throw error;
         }
       },
@@ -368,7 +386,7 @@ class InstagramBot {
         try {
           return await ig.sendDirectMessage(userID, text);
         } catch (error) {
-          logger.error('Failed to send direct message', { error: error.message, userID });
+          logger.error('Failed to send direct message', { error: error?.message || error, userID });
           throw error;
         }
       },
@@ -377,7 +395,7 @@ class InstagramBot {
         try {
           return await ig.getThreadInfo(threadID);
         } catch (error) {
-          logger.error('Failed to get thread', { error: error.message, threadID });
+          logger.error('Failed to get thread', { error: error?.message || error, threadID });
           throw error;
         }
       },
@@ -386,7 +404,7 @@ class InstagramBot {
         try {
           return await ig.getInbox();
         } catch (error) {
-          logger.error('Failed to get inbox', { error: error.message });
+          logger.error('Failed to get inbox', { error: error?.message || error });
           throw error;
         }
       },
@@ -395,7 +413,7 @@ class InstagramBot {
         try {
           return await ig.markAsRead(threadID, true);
         } catch (error) {
-          logger.error('Failed to mark as seen', { error: error.message, threadID });
+          logger.error('Failed to mark as seen', { error: error?.message || error, threadID });
         }
       },
 
@@ -407,7 +425,7 @@ class InstagramBot {
           }
           return await ig.sendPhoto(threadID, photoPath, {});
         } catch (error) {
-          logger.error('Failed to send photo', { error: error.message, threadID });
+          logger.error('Failed to send photo', { error: error?.message || error, threadID });
           throw error;
         }
       },
@@ -420,7 +438,7 @@ class InstagramBot {
           }
           return await ig.sendVideo(threadID, videoPath, {});
         } catch (error) {
-          logger.error('Failed to send video', { error: error.message, threadID });
+          logger.error('Failed to send video', { error: error?.message || error, threadID });
           throw error;
         }
       },
@@ -433,19 +451,18 @@ class InstagramBot {
           }
           return await ig.sendVoice(threadID, audioPath, {});
         } catch (error) {
-          logger.error('Failed to send audio', { error: error.message, threadID });
+          logger.error('Failed to send audio', { error: error?.message || error, threadID });
           throw error;
         }
       },
 
-      // threadID kept for db tracking; only messageID is passed to the library
       unsendMessage: async (threadID, messageID) => {
         try {
           await ig.unsendMessage(messageID);
           const db = require('../utils/database');
           db.removeSentMessage(threadID, messageID);
         } catch (error) {
-          logger.error('Failed to unsend message', { error: error.message, threadID, messageID });
+          logger.error('Failed to unsend message', { error: error?.message || error, threadID, messageID });
           throw error;
         }
       },
@@ -459,7 +476,7 @@ class InstagramBot {
         try {
           return await ig.getUserInfo(userID);
         } catch (error) {
-          logger.error('Failed to get user info', { error: error.message, userID });
+          logger.error('Failed to get user info', { error: error?.message || error, userID });
           throw error;
         }
       },
@@ -468,7 +485,7 @@ class InstagramBot {
         try {
           return await ig.getUserInfoByUsername(username);
         } catch (error) {
-          logger.error('Failed to get user info by username', { error: error.message, username });
+          logger.error('Failed to get user info by username', { error: error?.message || error, username });
           throw error;
         }
       },
@@ -477,7 +494,7 @@ class InstagramBot {
         try {
           return await ig.sendPhotoFromUrl(threadID, url, opts);
         } catch (error) {
-          logger.error('Failed to send photo from url', { error: error.message, threadID });
+          logger.error('Failed to send photo from url', { error: error?.message || error, threadID });
           throw error;
         }
       },
@@ -486,7 +503,7 @@ class InstagramBot {
         try {
           return await ig.sendVideoFromUrl(threadID, url, opts);
         } catch (error) {
-          logger.error('Failed to send video from url', { error: error.message, threadID });
+          logger.error('Failed to send video from url', { error: error?.message || error, threadID });
           throw error;
         }
       },
@@ -495,7 +512,7 @@ class InstagramBot {
         try {
           return await ig.sendVoiceFromUrl(threadID, url, opts);
         } catch (error) {
-          logger.error('Failed to send voice from url', { error: error.message, threadID });
+          logger.error('Failed to send voice from url', { error: error?.message || error, threadID });
           throw error;
         }
       },
@@ -504,7 +521,7 @@ class InstagramBot {
         try {
           return await ig.sendReaction(reaction, messageID);
         } catch (error) {
-          logger.error('Failed to send reaction', { error: error.message, messageID });
+          logger.error('Failed to send reaction', { error: error?.message || error, messageID });
         }
       },
 
@@ -512,7 +529,7 @@ class InstagramBot {
         try {
           return await ig.replyToMessage(threadID, text, replyToMessageID);
         } catch (error) {
-          logger.error('Failed to reply to message', { error: error.message, threadID });
+          logger.error('Failed to reply to message', { error: error?.message || error, threadID });
           throw error;
         }
       }
@@ -535,12 +552,12 @@ class InstagramBot {
               reminder.userId
             );
           } catch (err) {
-            logger.warn('Could not deliver reminder', { userId: reminder.userId, error: err.message });
+            logger.warn('Could not deliver reminder', { userId: reminder.userId, error: err?.message || err });
           }
         }
         if (due.length > 0) database.save();
       } catch (err) {
-        logger.error('Reminder scheduler error', { error: err.message });
+        logger.error('Reminder scheduler error', { error: err?.message || err });
       }
     }, 30000);
     logger.info('Reminder scheduler started (checks every 30s)');
@@ -600,15 +617,15 @@ class InstagramBot {
           logger.error('Cookie refresh returned empty instance.');
         }
       } catch (err) {
-        logger.error('Cookie refresh failed.', { error: err.message });
+        logger.error('Cookie refresh failed.', { error: err?.message || err });
       }
     }, intervalMs);
   }
 
   async _sendMqttErrorNotification(errorMsg) {
-    const { telegram, discordHook } = config.NOTI_MQTT_ERROR;
+    const { telegram, discordHook } = config.NOTI_MQTT_ERROR || {};
 
-    if (telegram.enable && telegram.botToken) {
+    if (telegram?.enable && telegram?.botToken) {
       const chatIds = telegram.chatId.split(/[, ]+/).filter(Boolean);
       for (const chatId of chatIds) {
         axios.post(`https://api.telegram.org/bot${telegram.botToken}/sendMessage`, {
@@ -618,7 +635,7 @@ class InstagramBot {
       }
     }
 
-    if (discordHook.enable && discordHook.webhookUrl) {
+    if (discordHook?.enable && discordHook?.webhookUrl) {
       const urls = discordHook.webhookUrl.split(/[ ]+/).filter(Boolean);
       for (const url of urls) {
         axios.post(url, { content: `⚠️ Bot MQTT error:\n${errorMsg}` }).catch(() => {});
@@ -637,7 +654,7 @@ class InstagramBot {
     logger.info(`Reconnecting in 5s (attempt ${this.reconnectAttempts}/${config.MAX_RECONNECT_ATTEMPTS})…`);
     setTimeout(() => {
       this.loadAndLogin().catch(err => {
-        logger.error('Reconnection failed', { error: err.message });
+        logger.error('Reconnection failed', { error: err?.message || err });
         this.scheduleReconnect();
       });
     }, 5000);
@@ -664,11 +681,11 @@ class InstagramBot {
     process.on('SIGTERM', () => shutdown('SIGTERM'));
 
     process.on('uncaughtException', (error) => {
-      logger.error('Uncaught exception', { error: error.message, stack: error.stack });
+      logger.error('Uncaught exception caught safely', { error: error?.message || error, stack: error?.stack });
     });
 
     process.on('unhandledRejection', (reason) => {
-      logger.error('Unhandled rejection', { reason: String(reason) });
+      logger.error('Unhandled rejection caught safely', { reason: String(reason?.message || reason) });
     });
   }
 
