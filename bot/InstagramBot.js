@@ -65,7 +65,9 @@ class InstagramBot {
       this.eventLoader.registerEvents();
 
       // Apply options before login (available on the login function itself)
-      login.setOptions(config.OPTIONS_FCA);
+      if (login && typeof login.setOptions === 'function') {
+        login.setOptions(config.OPTIONS_FCA);
+      }
 
       await this.loadAndLogin();
 
@@ -107,6 +109,11 @@ class InstagramBot {
       );
     }
 
+    // Safeguard check to ensure login instance was successfully returned
+    if (!this.ig) {
+      throw new Error('Login returned empty or invalid instance.');
+    }
+
     this._afterLogin();
 
     if (hasCredentials && config.AUTO_REFRESH_FBSTATE && config.INTERVAL_GET_NEW_COOKIE) {
@@ -124,10 +131,10 @@ class InstagramBot {
 
   _afterLogin() {
     try {
-      const idResult = this.ig.getCurrentUserID();
-      this.userID = typeof idResult === 'object'
+      const idResult = typeof this.ig.getCurrentUserID === 'function' ? this.ig.getCurrentUserID() : null;
+      this.userID = idResult && typeof idResult === 'object'
         ? (idResult.userID || idResult.userId || String(idResult))
-        : String(idResult);
+        : (idResult ? String(idResult) : 'unknown');
     } catch (e) {
       this.userID = 'unknown';
     }
@@ -148,6 +155,11 @@ class InstagramBot {
 
   startListening() {
     logger.info('Starting message listener…');
+
+    if (!this.ig || typeof this.ig.listen !== 'function') {
+      logger.error('Listen method not available on ig instance.');
+      return;
+    }
 
     this.ig.listen((err, event) => {
       if (err) {
@@ -196,7 +208,7 @@ class InstagramBot {
     const { timeRestart, delayAfterStopListening, logNoti } = config.RESTART_LISTEN_MQTT;
     this._mqttRestartTimer = setInterval(() => {
       if (logNoti) logger.info('Periodic MQTT listener restart…');
-      try { this.ig.stopListening(); } catch (_) {}
+      try { if (this.ig && typeof this.ig.stopListening === 'function') this.ig.stopListening(); } catch (_) {}
       setTimeout(() => {
         if (this.isRunning) this.startListening();
       }, delayAfterStopListening);
@@ -336,7 +348,7 @@ class InstagramBot {
     return {
       sendMessage: async (text, threadID) => {
         try {
-          if (config.TYPING_INDICATOR) {
+          if (config.TYPING_INDICATOR && ig && typeof ig.sendTypingIndicator === 'function') {
             ig.sendTypingIndicator(threadID);
             await this._sleep(config.TYPING_INDICATOR_DURATION);
           }
@@ -389,7 +401,7 @@ class InstagramBot {
 
       sendPhoto: async (photoPath, threadID) => {
         try {
-          if (config.TYPING_INDICATOR) {
+          if (config.TYPING_INDICATOR && ig && typeof ig.sendTypingIndicator === 'function') {
             ig.sendTypingIndicator(threadID);
             await this._sleep(config.TYPING_INDICATOR_DURATION);
           }
@@ -402,7 +414,7 @@ class InstagramBot {
 
       sendVideo: async (videoPath, threadID) => {
         try {
-          if (config.TYPING_INDICATOR) {
+          if (config.TYPING_INDICATOR && ig && typeof ig.sendTypingIndicator === 'function') {
             ig.sendTypingIndicator(threadID);
             await this._sleep(config.TYPING_INDICATOR_DURATION);
           }
@@ -415,7 +427,7 @@ class InstagramBot {
 
       sendAudio: async (audioPath, threadID) => {
         try {
-          if (config.TYPING_INDICATOR) {
+          if (config.TYPING_INDICATOR && ig && typeof ig.sendTypingIndicator === 'function') {
             ig.sendTypingIndicator(threadID);
             await this._sleep(config.TYPING_INDICATOR_DURATION);
           }
@@ -581,8 +593,12 @@ class InstagramBot {
           email:    config.ACCOUNT_EMAIL,
           password: config.ACCOUNT_PASSWORD
         });
-        this._afterLogin();
-        logger.info('Cookie refresh successful.');
+        if (this.ig) {
+          this._afterLogin();
+          logger.info('Cookie refresh successful.');
+        } else {
+          logger.error('Cookie refresh returned empty instance.');
+        }
       } catch (err) {
         logger.error('Cookie refresh failed.', { error: err.message });
       }
@@ -639,7 +655,7 @@ class InstagramBot {
       if (this._mqttRestartTimer)   clearInterval(this._mqttRestartTimer);
       if (this._cookieRefreshTimer) clearInterval(this._cookieRefreshTimer);
       if (this._reminderTimer)      clearInterval(this._reminderTimer);
-      try { if (this.ig) this.ig.stopListening(); } catch (_) {}
+      try { if (this.ig && typeof this.ig.stopListening === 'function') this.ig.stopListening(); } catch (_) {}
       logger.info('Bot shutdown complete');
       process.exit(0);
     };
