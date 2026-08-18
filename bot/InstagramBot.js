@@ -128,10 +128,13 @@ class InstagramBot {
     } catch (loginErr) {
       let cleanMsg = 'Login execution failed';
       try {
-        if (typeof loginErr === 'string') {
+        if (!loginErr) {
+          cleanMsg = 'Empty or undefined error returned from login module';
+        } else if (typeof loginErr === 'string') {
           cleanMsg = loginErr;
-        } else if (loginErr && typeof loginErr === 'object') {
-          cleanMsg = loginErr.message || loginErr.error || JSON.stringify(loginErr, Object.getOwnPropertyNames(loginErr));
+        } else if (typeof loginErr === 'object') {
+          // Fully safe navigation to prevent "Cannot read properties of undefined (reading 'error')"
+          cleanMsg = loginErr.message || (loginErr.error ? String(loginErr.error) : '') || JSON.stringify(loginErr) || 'Unknown login object error';
         } else {
           cleanMsg = String(loginErr);
         }
