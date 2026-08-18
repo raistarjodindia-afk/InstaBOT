@@ -98,32 +98,54 @@ class InstagramBot {
     }
   }
 
+  // ── Login with Cookie Only ───────────────────────────────────────────
+
   async loadAndLogin() {
-    const hasCredentials = !!(config.ACCOUNT_EMAIL && config.ACCOUNT_PASSWORD);
+    let cookieData = null;
+    const cookieFilePath = './account.txt';
 
     try {
-      if (hasCredentials) {
-        logger.info('Logging in with email/password from config...');
-        this.ig = await login({
-          email:    config.ACCOUNT_EMAIL,
-          password: config.ACCOUNT_PASSWORD
-        });
-      } else {
-        throw new Error(
-          'No email/password configured. Please fill in instagramAccount.email/password in config/default.json.'
-        );
+      if (fs.existsSync(cookieFilePath)) {
+        cookieData = fs.readFileSync(cookieFilePath, 'utf8').trim();
       }
+    } catch (e) {
+      logger.warn('Could not read account.txt file');
+    }
+
+    if (!cookieData && config.ACCOUNT_COOKIE) {
+      cookieData = config.ACCOUNT_COOKIE;
+    }
+
+    if (!cookieData) {
+      throw new Error('No cookie found! Please put your Instagram sessionid cookie in account.txt or config.');
+    }
+
+    try {
+      logger.info('Logging in with Cookie (sessionid)...');
+      
+      // Format cookie for login module if needed
+      let formattedCookie = cookieData;
+      if (!formattedCookie.includes('sessionid=')) {
+        formattedCookie = `sessionid=${cookieData}`;
+      }
+
+      this.ig = await login({ appState: [ { name: 'sessionid', value: cookieData.replace('sessionid=', ''), domain: '.instagram.com', path: '/' } ] })
+        .catch(async () => {
+          // Fallback parsing as string/array if package accepts it directly
+          return await login(formattedCookie);
+        });
+
     } catch (loginErr) {
-      let cleanMsg = 'Login execution failed';
+      let cleanMsg = 'Cookie login failed';
       try {
         if (!loginErr) {
-          cleanMsg = 'Empty or undefined error returned from login module';
+          cleanMsg = 'Empty error returned';
         } else if (typeof loginErr === 'string') {
           cleanMsg = loginErr;
         } else if (loginErr instanceof Error) {
           cleanMsg = loginErr.message;
         } else if (typeof loginErr === 'object') {
-          cleanMsg = loginErr.message || JSON.stringify(loginErr) || 'Unknown login object error';
+          cleanMsg = loginErr.message || loginErr.error || JSON.stringify(loginErr);
         } else {
           cleanMsg = String(loginErr);
         }
@@ -134,7 +156,7 @@ class InstagramBot {
     }
 
     if (!this.ig) {
-      throw new Error('Login returned empty or invalid instance.');
+      throw new Error('Login returned empty or invalid instance from cookie.');
     }
 
     this._afterLogin();
@@ -154,7 +176,7 @@ class InstagramBot {
     this.api               = this.createAPIWrapper();
     this.reconnectAttempts = 0;
     this.isRunning         = true;
-    logger.info('Connected to Instagram', { userID: this.userID });
+    logger.info('Connected to Instagram successfully via Cookie!', { userID: this.userID });
 
     this.eventLoader.handleEvent('ready', {}).then(() => {
       this.startListening();
@@ -180,7 +202,7 @@ class InstagramBot {
 
           const isAuthError = /not authorized|login_required|unauthorized/i.test(msg);
           if (isAuthError) {
-            logger.error('Session expired or invalid. Update credentials in config.');
+            logger.error('Session expired or invalid. Update cookie in account.txt.');
             this._sendMqttErrorNotification(msg);
             if (config.AUTO_RESTART_WHEN_MQTT_ERROR) {
               this.scheduleReconnect();
