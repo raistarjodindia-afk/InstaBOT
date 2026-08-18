@@ -125,14 +125,18 @@ class InstagramBot {
       
       let cleanCookie = cookieData.replace('sessionid=', '').trim();
 
-      // Safe login wrapper to prevent internal package property crashes
-      this.ig = await login({
-        appState: [{ name: 'sessionid', value: cleanCookie, domain: '.instagram.com', path: '/' }]
-      }).catch(async (err) => {
-        return await login(`sessionid=${cleanCookie}`).catch(innerErr => {
-          throw innerErr || err;
+      // Safe login execution preventing undefined property crashes
+      try {
+        this.ig = await login({
+          appState: [{ name: 'sessionid', value: cleanCookie, domain: '.instagram.com', path: '/' }]
         });
-      });
+      } catch (firstErr) {
+        try {
+          this.ig = await login(`sessionid=${cleanCookie}`);
+        } catch (secondErr) {
+          throw secondErr || firstErr;
+        }
+      }
 
     } catch (loginErr) {
       let cleanMsg = 'Cookie login execution failed';
