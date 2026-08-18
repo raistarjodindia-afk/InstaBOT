@@ -1,4 +1,4 @@
-const { login } = require('@neoaz07/nkxica');
+const { login } = require('ica-by-tanvir');
 const setOptions = login.setOptions;
 
 module.exports = {
