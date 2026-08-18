@@ -22,8 +22,8 @@ const pkg = (() => {
 module.exports = {
   // ── Bot identity ──────────────────────────────────────────────────────
   BOT_NAME:    c.nickNameBot || 'ElevenBot',
-  BOT_VERSION: pkg.version   || '1.0.0',
-  AUTHOR:      pkg.author    || 'NeoKEX',
+  BOT_VERSION: pkg.version   || '1.0.1',
+  AUTHOR:      pkg.author    || 'tanvir143',
 
   // ── Account ──────────────────────────────────────────────────────────
   ACCOUNT_EMAIL:    process.env.ACCOUNT_EMAIL    || c.instagramAccount?.email    || '',
