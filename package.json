@@ -14,7 +14,7 @@
   "node": "20.x"
 },
   "dependencies": {
-    "ica-by-tanvir": "^1.1.1",
+    "ica-by-tanvir": "^1.1.2",
     "axios": "^1.13.1",
     "dotenv": "^17.2.3",
     "fs-extra": "^11.3.2",
