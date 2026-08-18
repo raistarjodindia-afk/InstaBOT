@@ -125,8 +125,10 @@ class InstagramBot {
           cleanMsg = 'Empty or undefined error returned from login module';
         } else if (typeof loginErr === 'string') {
           cleanMsg = loginErr;
+        } else if (loginErr instanceof Error) {
+          cleanMsg = loginErr.message;
         } else if (typeof loginErr === 'object') {
-          cleanMsg = loginErr.message || (loginErr.error ? String(loginErr.error) : '') || JSON.stringify(loginErr) || 'Unknown login object error';
+          cleanMsg = loginErr.message || JSON.stringify(loginErr) || 'Unknown login object error';
         } else {
           cleanMsg = String(loginErr);
         }
