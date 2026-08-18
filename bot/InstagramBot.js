@@ -98,7 +98,7 @@ class InstagramBot {
     }
   }
 
-  // ── Login with Cookie Only (Safely Handled) ───────────────────────────
+  // ── Login with Full Cookie or SessionID (Safely Handled) ───────────────
 
   async loadAndLogin() {
     let cookieData = null;
@@ -117,21 +117,46 @@ class InstagramBot {
     }
 
     if (!cookieData) {
-      throw new Error('No cookie found! Please put your Instagram sessionid cookie in account.txt.');
+      throw new Error('No cookie found! Please put your Instagram cookies in account.txt.');
     }
 
-    logger.info('Logging in with Cookie (sessionid)...');
-    let cleanCookie = cookieData.replace('sessionid=', '').trim();
+    logger.info('Logging in with Cookies...');
 
     try {
-      this.ig = await login({
-        appState: [{ name: 'sessionid', value: cleanCookie, domain: '.instagram.com', path: '/' }]
-      });
+      let appState;
+      // যদি কুকিটি JSON অ্যারে বা অবজেক্ট হয়
+      if (cookieData.startsWith('[') || cookieData.startsWith('{')) {
+        appState = JSON.parse(cookieData);
+      } else if (cookieData.includes('=')) {
+        // যদি ফুল কুকি স্ট্রিং হয় (যেমন: ds_user_id=xxx; sessionid=yyy) অথবা শুধু sessionid হয়
+        appState = cookieData.split(';').map(cookie => {
+          const parts = cookie.trim().split('=');
+          const name = parts[0];
+          const value = parts.slice(1).join('=');
+          if (!name || !value) return null;
+          return {
+            key: name.trim(),
+            value: value.trim(),
+            domain: '.instagram.com',
+            path: '/'
+          };
+        }).filter(Boolean);
+        
+        if (appState.length === 0) {
+          appState = [{ name: 'sessionid', value: cookieData.replace('sessionid=', '').trim(), domain: '.instagram.com', path: '/' }];
+        }
+      } else {
+        appState = [{ name: 'sessionid', value: cookieData.trim(), domain: '.instagram.com', path: '/' }];
+      }
+
+      this.ig = await login({ appState });
+
     } catch (firstErr) {
       try {
+        let cleanCookie = cookieData.replace('sessionid=', '').trim();
         this.ig = await login(`sessionid=${cleanCookie}`);
       } catch (secondErr) {
-        throw new Error('Cookie login failed. Please check if your sessionid cookie is valid or expired.');
+        throw new Error('Cookie login failed. Please check if your cookies are valid or expired.');
       }
     }
 
