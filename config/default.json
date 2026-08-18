@@ -1,9 +1,9 @@
 {
   "instagramAccount": {
-    "email": "submit_report@yahoo.com",
-    "password": "ig30102006",
+    "email": "",
+    "password": "",
     "2FASecret": "",
-    "i_user": "33632110603",
+    "i_user": "",
     "proxy": null,
     "userAgent": "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
     "intervalGetNewCookie": 1440,
