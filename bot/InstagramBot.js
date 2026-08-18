@@ -120,42 +120,19 @@ class InstagramBot {
       throw new Error('No cookie found! Please put your Instagram sessionid cookie in account.txt.');
     }
 
+    logger.info('Logging in with Cookie (sessionid)...');
+    let cleanCookie = cookieData.replace('sessionid=', '').trim();
+
     try {
-      logger.info('Logging in with Cookie (sessionid)...');
-      
-      let cleanCookie = cookieData.replace('sessionid=', '').trim();
-
-      // Safe login execution preventing undefined property crashes
+      this.ig = await login({
+        appState: [{ name: 'sessionid', value: cleanCookie, domain: '.instagram.com', path: '/' }]
+      });
+    } catch (firstErr) {
       try {
-        this.ig = await login({
-          appState: [{ name: 'sessionid', value: cleanCookie, domain: '.instagram.com', path: '/' }]
-        });
-      } catch (firstErr) {
-        try {
-          this.ig = await login(`sessionid=${cleanCookie}`);
-        } catch (secondErr) {
-          throw secondErr || firstErr;
-        }
+        this.ig = await login(`sessionid=${cleanCookie}`);
+      } catch (secondErr) {
+        throw new Error('Cookie login failed. Please check if your sessionid cookie is valid or expired.');
       }
-
-    } catch (loginErr) {
-      let cleanMsg = 'Cookie login execution failed';
-      try {
-        if (!loginErr) {
-          cleanMsg = 'Empty error returned from login';
-        } else if (typeof loginErr === 'string') {
-          cleanMsg = loginErr;
-        } else if (loginErr instanceof Error) {
-          cleanMsg = loginErr.message;
-        } else if (typeof loginErr === 'object') {
-          cleanMsg = loginErr.message || loginErr.error || loginErr.err || JSON.stringify(loginErr) || 'Unknown login object error';
-        } else {
-          cleanMsg = String(loginErr);
-        }
-      } catch (e) {
-        cleanMsg = 'Login failed with unparseable error';
-      }
-      throw new Error(cleanMsg);
     }
 
     if (!this.ig) {
