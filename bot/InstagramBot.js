@@ -45,7 +45,7 @@ class InstagramBot {
       logger.info(`Health server listening on port ${port}`);
     });
     server.on('error', err => {
-      logger.error('Health server error', { error: err?.message || err });
+      logger.error('Health server error', { error: err?.message || String(err) });
     });
     return server;
   }
@@ -74,8 +74,20 @@ class InstagramBot {
       this._scheduleAutoRestart();
       this._scheduleAutoUptime();
     } catch (error) {
-      const errorMsg = error?.message || error?.error || (typeof error === 'string' ? error : JSON.stringify(error)) || 'Unknown Error';
-      logger.error('Failed to start bot', { error: errorMsg, stack: error?.stack });
+      let errorMsg = 'Unknown Error';
+      try {
+        if (typeof error === 'string') {
+          errorMsg = error;
+        } else if (error && typeof error === 'object') {
+          errorMsg = error.message || error.error || JSON.stringify(error);
+        } else {
+          errorMsg = String(error);
+        }
+      } catch (e) {
+        errorMsg = 'Unparseable Error Object';
+      }
+
+      logger.error('Failed to start bot', { error: errorMsg, stack: error?.stack || '' });
       try {
         await this.eventLoader.handleEvent('error', error);
       } catch (e) {}
@@ -115,12 +127,16 @@ class InstagramBot {
       }
     } catch (loginErr) {
       let cleanMsg = 'Login execution failed';
-      if (loginErr) {
+      try {
         if (typeof loginErr === 'string') {
           cleanMsg = loginErr;
-        } else {
+        } else if (loginErr && typeof loginErr === 'object') {
           cleanMsg = loginErr.message || loginErr.error || JSON.stringify(loginErr);
+        } else {
+          cleanMsg = String(loginErr);
         }
+      } catch (e) {
+        cleanMsg = 'Login failed with unparseable error';
       }
       throw new Error(cleanMsg);
     }
@@ -165,7 +181,7 @@ class InstagramBot {
       this.startListening();
       this._startReminderScheduler();
     }).catch(err => {
-      logger.error('Error in ready event handler', { error: err?.message || err });
+      logger.error('Error in ready event handler', { error: err?.message || String(err) });
     });
   }
 
@@ -182,7 +198,7 @@ class InstagramBot {
     try {
       this.ig.listen((err, event) => {
         if (err) {
-          const msg = err?.message || err?.error || String(err);
+          const msg = (err && typeof err === 'object') ? (err.message || err.error || JSON.stringify(err)) : String(err);
           logger.error('Listen error', { error: msg });
 
           const isAuthError = /not authorized|login_required|unauthorized/i.test(msg);
@@ -202,20 +218,20 @@ class InstagramBot {
 
         if (event.type === 'message') {
           this.handleMessage(event).catch(error => {
-            logger.error('Error handling message', { error: error?.message || error });
+            logger.error('Error handling message', { error: error?.message || String(error) });
           });
         } else if (event.type === 'event') {
           this.handleThreadEvent(event).catch(error => {
-            logger.error('Error handling thread event', { error: error?.message || error });
+            logger.error('Error handling thread event', { error: error?.message || String(error) });
           });
         } else if (event.type === 'message_reaction') {
           this.handleReactionEvent(event).catch(error => {
-            logger.error('Error handling reaction event', { error: error?.message || error });
+            logger.error('Error handling reaction event', { error: error?.message || String(error) });
           });
         }
       });
     } catch (listenerErr) {
-      logger.error('Critical listen failure', { error: listenerErr?.message || listenerErr });
+      logger.error('Critical listen failure', { error: listenerErr?.message || String(listenerErr) });
       if (this.shouldReconnect) {
         this.scheduleReconnect();
       }
@@ -274,7 +290,7 @@ class InstagramBot {
 
       await this.eventLoader.handleEvent('message', normalizedEvent);
     } catch (error) {
-      logger.error('Error in handleMessage', { error: error?.message || error, stack: error?.stack });
+      logger.error('Error in handleMessage', { error: error?.message || String(error), stack: error?.stack || '' });
     }
   }
 
@@ -323,7 +339,7 @@ class InstagramBot {
         });
       }
     } catch (error) {
-      logger.error('Error in handleThreadEvent', { error: error?.message || error });
+      logger.error('Error in handleThreadEvent', { error: error?.message || String(error) });
     }
   }
 
@@ -345,7 +361,7 @@ class InstagramBot {
         timestamp:       event.timestamp || Date.now()
       });
     } catch (error) {
-      logger.error('Error in handleReactionEvent', { error: error?.message || error });
+      logger.error('Error in handleReactionEvent', { error: error?.message || String(error) });
     }
   }
 
@@ -384,7 +400,7 @@ class InstagramBot {
           }
           return result;
         } catch (error) {
-          logger.error('Failed to send message', { error: error?.message || error, threadID });
+          logger.error('Failed to send message', { error: error?.message || String(error), threadID });
           throw error;
         }
       },
@@ -393,7 +409,7 @@ class InstagramBot {
         try {
           return await ig.sendDirectMessage(userID, text);
         } catch (error) {
-          logger.error('Failed to send direct message', { error: error?.message || error, userID });
+          logger.error('Failed to send direct message', { error: error?.message || String(error), userID });
           throw error;
         }
       },
@@ -402,7 +418,7 @@ class InstagramBot {
         try {
           return await ig.getThreadInfo(threadID);
         } catch (error) {
-          logger.error('Failed to get thread', { error: error?.message || error, threadID });
+          logger.error('Failed to get thread', { error: error?.message || String(error), threadID });
           throw error;
         }
       },
@@ -411,7 +427,7 @@ class InstagramBot {
         try {
           return await ig.getInbox();
         } catch (error) {
-          logger.error('Failed to get inbox', { error: error?.message || error });
+          logger.error('Failed to get inbox', { error: error?.message || String(error) });
           throw error;
         }
       },
@@ -420,7 +436,7 @@ class InstagramBot {
         try {
           return await ig.markAsRead(threadID, true);
         } catch (error) {
-          logger.error('Failed to mark as seen', { error: error?.message || error, threadID });
+          logger.error('Failed to mark as seen', { error: error?.message || String(error), threadID });
         }
       },
 
@@ -432,7 +448,7 @@ class InstagramBot {
           }
           return await ig.sendPhoto(threadID, photoPath, {});
         } catch (error) {
-          logger.error('Failed to send photo', { error: error?.message || error, threadID });
+          logger.error('Failed to send photo', { error: error?.message || String(error), threadID });
           throw error;
         }
       },
@@ -445,7 +461,7 @@ class InstagramBot {
           }
           return await ig.sendVideo(threadID, videoPath, {});
         } catch (error) {
-          logger.error('Failed to send video', { error: error?.message || error, threadID });
+          logger.error('Failed to send video', { error: error?.message || String(error), threadID });
           throw error;
         }
       },
@@ -458,7 +474,7 @@ class InstagramBot {
           }
           return await ig.sendVoice(threadID, audioPath, {});
         } catch (error) {
-          logger.error('Failed to send audio', { error: error?.message || error, threadID });
+          logger.error('Failed to send audio', { error: error?.message || String(error), threadID });
           throw error;
         }
       },
@@ -469,7 +485,7 @@ class InstagramBot {
           const db = require('../utils/database');
           db.removeSentMessage(threadID, messageID);
         } catch (error) {
-          logger.error('Failed to unsend message', { error: error?.message || error, threadID, messageID });
+          logger.error('Failed to unsend message', { error: error?.message || String(error), threadID, messageID });
           throw error;
         }
       },
@@ -483,7 +499,7 @@ class InstagramBot {
         try {
           return await ig.getUserInfo(userID);
         } catch (error) {
-          logger.error('Failed to get user info', { error: error?.message || error, userID });
+          logger.error('Failed to get user info', { error: error?.message || String(error), userID });
           throw error;
         }
       },
@@ -492,7 +508,7 @@ class InstagramBot {
         try {
           return await ig.getUserInfoByUsername(username);
         } catch (error) {
-          logger.error('Failed to get user info by username', { error: error?.message || error, username });
+          logger.error('Failed to get user info by username', { error: error?.message || String(error), username });
           throw error;
         }
       },
@@ -501,7 +517,7 @@ class InstagramBot {
         try {
           return await ig.sendPhotoFromUrl(threadID, url, opts);
         } catch (error) {
-          logger.error('Failed to send photo from url', { error: error?.message || error, threadID });
+          logger.error('Failed to send photo from url', { error: error?.message || String(error), threadID });
           throw error;
         }
       },
@@ -510,7 +526,7 @@ class InstagramBot {
         try {
           return await ig.sendVideoFromUrl(threadID, url, opts);
         } catch (error) {
-          logger.error('Failed to send video from url', { error: error?.message || error, threadID });
+          logger.error('Failed to send video from url', { error: error?.message || String(error), threadID });
           throw error;
         }
       },
@@ -519,7 +535,7 @@ class InstagramBot {
         try {
           return await ig.sendVoiceFromUrl(threadID, url, opts);
         } catch (error) {
-          logger.error('Failed to send voice from url', { error: error?.message || error, threadID });
+          logger.error('Failed to send voice from url', { error: error?.message || String(error), threadID });
           throw error;
         }
       },
@@ -528,7 +544,7 @@ class InstagramBot {
         try {
           return await ig.sendReaction(reaction, messageID);
         } catch (error) {
-          logger.error('Failed to send reaction', { error: error?.message || error, messageID });
+          logger.error('Failed to send reaction', { error: error?.message || String(error), messageID });
         }
       },
 
@@ -536,7 +552,7 @@ class InstagramBot {
         try {
           return await ig.replyToMessage(threadID, text, replyToMessageID);
         } catch (error) {
-          logger.error('Failed to reply to message', { error: error?.message || error, threadID });
+          logger.error('Failed to reply to message', { error: error?.message || String(error), threadID });
           throw error;
         }
       }
@@ -559,12 +575,12 @@ class InstagramBot {
               reminder.userId
             );
           } catch (err) {
-            logger.warn('Could not deliver reminder', { userId: reminder.userId, error: err?.message || err });
+            logger.warn('Could not deliver reminder', { userId: reminder.userId, error: err?.message || String(err) });
           }
         }
         if (due.length > 0) database.save();
       } catch (err) {
-        logger.error('Reminder scheduler error', { error: err?.message || err });
+        logger.error('Reminder scheduler error', { error: err?.message || String(err) });
       }
     }, 30000);
     logger.info('Reminder scheduler started (checks every 30s)');
@@ -624,7 +640,7 @@ class InstagramBot {
           logger.error('Cookie refresh returned empty instance.');
         }
       } catch (err) {
-        logger.error('Cookie refresh failed.', { error: err?.message || err });
+        logger.error('Cookie refresh failed.', { error: err?.message || String(err) });
       }
     }, intervalMs);
   }
@@ -661,7 +677,7 @@ class InstagramBot {
     logger.info(`Reconnecting in 5s (attempt ${this.reconnectAttempts}/${config.MAX_RECONNECT_ATTEMPTS})…`);
     setTimeout(() => {
       this.loadAndLogin().catch(err => {
-        logger.error('Reconnection failed', { error: err?.message || err });
+        logger.error('Reconnection failed', { error: err?.message || String(err) });
         this.scheduleReconnect();
       });
     }, 5000);
@@ -688,7 +704,7 @@ class InstagramBot {
     process.on('SIGTERM', () => shutdown('SIGTERM'));
 
     process.on('uncaughtException', (error) => {
-      logger.error('Uncaught exception caught safely', { error: error?.message || error, stack: error?.stack });
+      logger.error('Uncaught exception caught safely', { error: error?.message || String(error), stack: error?.stack || '' });
     });
 
     process.on('unhandledRejection', (reason) => {
