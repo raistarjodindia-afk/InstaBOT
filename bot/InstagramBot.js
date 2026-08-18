@@ -131,7 +131,7 @@ class InstagramBot {
         if (typeof loginErr === 'string') {
           cleanMsg = loginErr;
         } else if (loginErr && typeof loginErr === 'object') {
-          cleanMsg = loginErr.message || loginErr.error || JSON.stringify(loginErr);
+          cleanMsg = loginErr.message || loginErr.error || JSON.stringify(loginErr, Object.getOwnPropertyNames(loginErr));
         } else {
           cleanMsg = String(loginErr);
         }
@@ -559,7 +559,7 @@ class InstagramBot {
     };
   }
 
-  // ── Scheduled features ────────────────────────────────────────────────
+  // ── Scheduled features ------------------------------------------------
 
   _startReminderScheduler() {
     if (this._reminderTimer) clearInterval(this._reminderTimer);
