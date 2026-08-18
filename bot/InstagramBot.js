@@ -98,7 +98,7 @@ class InstagramBot {
     }
   }
 
-  // ── Login with Cookie Only ───────────────────────────────────────────
+  // ── Login with Cookie Only (Safely Handled) ───────────────────────────
 
   async loadAndLogin() {
     let cookieData = null;
@@ -117,35 +117,34 @@ class InstagramBot {
     }
 
     if (!cookieData) {
-      throw new Error('No cookie found! Please put your Instagram sessionid cookie in account.txt or config.');
+      throw new Error('No cookie found! Please put your Instagram sessionid cookie in account.txt.');
     }
 
     try {
       logger.info('Logging in with Cookie (sessionid)...');
       
-      // Format cookie for login module if needed
-      let formattedCookie = cookieData;
-      if (!formattedCookie.includes('sessionid=')) {
-        formattedCookie = `sessionid=${cookieData}`;
-      }
+      let cleanCookie = cookieData.replace('sessionid=', '').trim();
 
-      this.ig = await login({ appState: [ { name: 'sessionid', value: cookieData.replace('sessionid=', ''), domain: '.instagram.com', path: '/' } ] })
-        .catch(async () => {
-          // Fallback parsing as string/array if package accepts it directly
-          return await login(formattedCookie);
+      // Safe login wrapper to prevent internal package property crashes
+      this.ig = await login({
+        appState: [{ name: 'sessionid', value: cleanCookie, domain: '.instagram.com', path: '/' }]
+      }).catch(async (err) => {
+        return await login(`sessionid=${cleanCookie}`).catch(innerErr => {
+          throw innerErr || err;
         });
+      });
 
     } catch (loginErr) {
-      let cleanMsg = 'Cookie login failed';
+      let cleanMsg = 'Cookie login execution failed';
       try {
         if (!loginErr) {
-          cleanMsg = 'Empty error returned';
+          cleanMsg = 'Empty error returned from login';
         } else if (typeof loginErr === 'string') {
           cleanMsg = loginErr;
         } else if (loginErr instanceof Error) {
           cleanMsg = loginErr.message;
         } else if (typeof loginErr === 'object') {
-          cleanMsg = loginErr.message || loginErr.error || JSON.stringify(loginErr);
+          cleanMsg = loginErr.message || loginErr.error || loginErr.err || JSON.stringify(loginErr) || 'Unknown login object error';
         } else {
           cleanMsg = String(loginErr);
         }
