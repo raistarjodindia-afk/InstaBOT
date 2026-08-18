@@ -74,7 +74,7 @@ class InstagramBot {
       this._scheduleAutoRestart();
       this._scheduleAutoUptime();
     } catch (error) {
-      const errorMsg = error?.message || error?.error || JSON.stringify(error) || 'Unknown Error';
+      const errorMsg = error?.message || error?.error || (typeof error === 'string' ? error : JSON.stringify(error)) || 'Unknown Error';
       logger.error('Failed to start bot', { error: errorMsg, stack: error?.stack });
       try {
         await this.eventLoader.handleEvent('error', error);
@@ -114,7 +114,14 @@ class InstagramBot {
         );
       }
     } catch (loginErr) {
-      const cleanMsg = loginErr?.message || loginErr?.error || JSON.stringify(loginErr) || 'Login execution failed';
+      let cleanMsg = 'Login execution failed';
+      if (loginErr) {
+        if (typeof loginErr === 'string') {
+          cleanMsg = loginErr;
+        } else {
+          cleanMsg = loginErr.message || loginErr.error || JSON.stringify(loginErr);
+        }
+      }
       throw new Error(cleanMsg);
     }
 
