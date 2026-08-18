@@ -1,7 +1,18 @@
-[
+{
+  "deviceId": "android-65f99a54cb87d9df",
+  "phoneId": "250cc8be-d15d-42fc-916b-a485ba644c50",
+  "uuid": "cecab8dc-bfd5-4569-9d46-ac987f1a641a",
+  "advertisingId": "e1d42b7e-2fc6-4828-b9d2-da4249b168a5",
+  "sessionId": "33632110603%3AG16sHCmwPNnoE1%3A20%3AAYhZR5huX_Qk9qxU9x1lIqrKJBgkOqdvs0v46LZABA",
+  "clientSessionId": "fd386dce-97d3-4c2d-b2ea-1130636224b8",
+  "username": null,
+  "userId": null,
+  "fullName": null,
+  "userAgent": "Instagram 350.0.0.0.0 Android (13/53274657; 480dpi; 1080x1920; Google; Pixel 4; flame; qcom; en_US; 489720525)",
+  "cookies": [
 {
     "domain": ".instagram.com",
-    "expirationDate": 1821629182.228618,
+    "expirationDate": 1821645454.682525,
     "hostOnly": false,
     "httpOnly": false,
     "name": "csrftoken",
@@ -29,7 +40,7 @@
 },
 {
     "domain": ".instagram.com",
-    "expirationDate": 1787673982,
+    "expirationDate": 1787690255,
     "hostOnly": false,
     "httpOnly": false,
     "name": "dpr",
@@ -43,7 +54,7 @@
 },
 {
     "domain": ".instagram.com",
-    "expirationDate": 1794845182.228775,
+    "expirationDate": 1794861454.682877,
     "hostOnly": false,
     "httpOnly": false,
     "name": "ds_user_id",
@@ -121,7 +132,7 @@
     "secure": true,
     "session": true,
     "storeId": "0",
-    "value": "KND%2C17841433798094013%2C1788278789%3A01ff67ec346429aafd4865c03bd5510cd6cc4c39f2f411038b9f45318c9c15f7b2a4be71",
+    "value": "HIL%2C17841433798094013%2C1788295061%3A01ff5f9da04e3c213c25c67bf74b3ca434e3668ca47c0b76e8e35b4d18b5228addc12f70",
     "id": 9
 },
 {
@@ -140,7 +151,7 @@
 },
 {
     "domain": ".instagram.com",
-    "expirationDate": 1787673982,
+    "expirationDate": 1787690255,
     "hostOnly": false,
     "httpOnly": false,
     "name": "wd",
@@ -153,3 +164,4 @@
     "id": 11
 }
 ]
+}
