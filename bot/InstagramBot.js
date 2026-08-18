@@ -101,28 +101,21 @@ class InstagramBot {
     }
   }
 
-  // ── Login (Safe Guarded) ─────────────────────────────────────────────
+  // ── Login (Email/Password Only) ─────────────────────────────────────
 
   async loadAndLogin() {
-    const hasCookieFile   = fs.existsSync(config.ACCOUNT_FILE);
-    const hasCredentials  = !!(config.ACCOUNT_EMAIL && config.ACCOUNT_PASSWORD);
-    const cookieContent   = hasCookieFile ? fs.readFileSync(config.ACCOUNT_FILE, 'utf-8') : '';
-    const hasValidCookies = hasCookieFile && this._hasValidCookies(cookieContent);
+    const hasCredentials = !!(config.ACCOUNT_EMAIL && config.ACCOUNT_PASSWORD);
 
     try {
-      if (hasValidCookies) {
-        logger.info('Loading cookies from account.txt…');
-        this.ig = await login(cookieContent);
-      } else if (hasCredentials) {
-        logger.info('No valid cookies found — logging in with email/password…');
+      if (hasCredentials) {
+        logger.info('Logging in with email/password from config...');
         this.ig = await login({
           email:    config.ACCOUNT_EMAIL,
           password: config.ACCOUNT_PASSWORD
         });
       } else {
         throw new Error(
-          'No valid cookies in account.txt and no email/password configured. ' +
-          'Please add Instagram cookies or fill in instagramAccount.email/password in config/default.json.'
+          'No email/password configured. Please fill in instagramAccount.email/password in config/default.json.'
         );
       }
     } catch (loginErr) {
@@ -133,7 +126,6 @@ class InstagramBot {
         } else if (typeof loginErr === 'string') {
           cleanMsg = loginErr;
         } else if (typeof loginErr === 'object') {
-          // Fully safe navigation to prevent "Cannot read properties of undefined (reading 'error')"
           cleanMsg = loginErr.message || (loginErr.error ? String(loginErr.error) : '') || JSON.stringify(loginErr) || 'Unknown login object error';
         } else {
           cleanMsg = String(loginErr);
@@ -150,18 +142,6 @@ class InstagramBot {
     }
 
     this._afterLogin();
-
-    if (hasCredentials && config.AUTO_REFRESH_FBSTATE && config.INTERVAL_GET_NEW_COOKIE) {
-      this._scheduleCookieRefresh();
-    }
-  }
-
-  _hasValidCookies(content) {
-    return content.split('\n').some(line => {
-      const t = line.trim();
-      if (!t || (t.startsWith('#') && !t.startsWith('#HttpOnly'))) return false;
-      return t.includes('sessionid');
-    });
   }
 
   _afterLogin() {
@@ -206,7 +186,7 @@ class InstagramBot {
 
           const isAuthError = /not authorized|login_required|unauthorized/i.test(msg);
           if (isAuthError) {
-            logger.error('Session expired or invalid. Update account.txt or credentials in config.');
+            logger.error('Session expired or invalid. Update credentials in config.');
             this._sendMqttErrorNotification(msg);
             if (config.AUTO_RESTART_WHEN_MQTT_ERROR) {
               this.scheduleReconnect();
@@ -431,7 +411,6 @@ class InstagramBot {
           return await ig.getInbox();
         } catch (error) {
           logger.error('Failed to get inbox', { error: error?.message || String(error) });
-          throw error;
         }
       },
 
@@ -622,29 +601,6 @@ class InstagramBot {
     logger.info(`Auto-uptime ping to ${url} every ${config.AUTO_UPTIME_INTERVAL}s`);
     setInterval(() => {
       axios.get(url).catch(() => {});
-    }, intervalMs);
-  }
-
-  _scheduleCookieRefresh() {
-    if (this._cookieRefreshTimer) clearInterval(this._cookieRefreshTimer);
-    const intervalMs = (config.INTERVAL_GET_NEW_COOKIE || 1440) * 60 * 1000;
-    logger.info(`Cookie auto-refresh scheduled every ${config.INTERVAL_GET_NEW_COOKIE} minutes.`);
-    this._cookieRefreshTimer = setInterval(async () => {
-      logger.info('Refreshing cookies via email/password login…');
-      try {
-        this.ig = await login({
-          email:    config.ACCOUNT_EMAIL,
-          password: config.ACCOUNT_PASSWORD
-        });
-        if (this.ig) {
-          this._afterLogin();
-          logger.info('Cookie refresh successful.');
-        } else {
-          logger.error('Cookie refresh returned empty instance.');
-        }
-      } catch (err) {
-        logger.error('Cookie refresh failed.', { error: err?.message || String(err) });
-      }
     }, intervalMs);
   }
 
