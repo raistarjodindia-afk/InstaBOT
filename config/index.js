@@ -21,9 +21,9 @@ const pkg = (() => {
 
 module.exports = {
   // ── Bot identity ──────────────────────────────────────────────────────
-  BOT_NAME:    c.nickNameBot || 'InstaBOT',
-  BOT_VERSION: pkg.version   || '1.0.0',
-  AUTHOR:      pkg.author    || 'NeoKEX',
+  BOT_NAME:    c.nickNameBot || 'ElevenBot',
+  BOT_VERSION: pkg.version   || '1.0.1',
+  AUTHOR:      pkg.author    || 'tanvir143',
 
   // ── Account ──────────────────────────────────────────────────────────
   ACCOUNT_EMAIL:    process.env.ACCOUNT_EMAIL    || c.instagramAccount?.email    || '',
@@ -37,8 +37,8 @@ module.exports = {
   // ── General ───────────────────────────────────────────────────────────
   ANTI_INBOX:   c.antiInbox   ?? false,
   LANGUAGE:     c.language    || 'en',
-  NICK_NAME_BOT: c.nickNameBot || 'Bot',
-  PREFIX:       process.env.PREFIX || c.prefix || '~',
+  NICK_NAME_BOT: c.nickNameBot || 'ELEVEN BOT',
+  PREFIX:       process.env.PREFIX || c.prefix || '-',
   NO_PREFIX:    c.noPrefix ?? true,
 
   // ── Admin-only mode ───────────────────────────────────────────────────
